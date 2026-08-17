@@ -92,16 +92,18 @@ class KieClientTests(unittest.TestCase):
         )
         client = client_with(session)
 
-        task_id = client.create_seedream_task(
-            prompt="Edit this image",
-            image_urls=["https://files.example/input.png"],
-            aspect_ratio="1:1",
-            quality="basic",
-            output_format="png",
-            nsfw_checker=False,
-        )
+        with self.assertLogs("cloudbridge.providers.kie", level="INFO") as logs:
+            task_id = client.create_seedream_task(
+                prompt="Edit this image",
+                image_urls=["https://files.example/input.png"],
+                aspect_ratio="1:1",
+                quality="basic",
+                output_format="png",
+                nsfw_checker=False,
+            )
 
         self.assertEqual(task_id, "task-1")
+        self.assertIn("task_id=task-1", logs.output[0])
         url, call = session.post_calls[0]
         self.assertEqual(url, CREATE_TASK_URL)
         self.assertEqual(call["json"]["model"], MODEL_ID)
@@ -132,6 +134,29 @@ class KieClientTests(unittest.TestCase):
         self.assertEqual(result.task_id, "task-1")
         self.assertEqual(result.result_urls, ["https://result.example/image.png"])
         self.assertTrue(all(call[0] == TASK_STATUS_URL for call in session.get_calls))
+
+    def test_logs_remote_progress_when_available(self):
+        session = FakeSession(
+            get_responses=[
+                FakeResponse(
+                    payload={
+                        "code": 200,
+                        "data": {
+                            "state": "success",
+                            "progress": 100,
+                            "resultJson": {"resultUrls": ["https://result.example/image.png"]},
+                        },
+                    }
+                )
+            ]
+        )
+
+        with self.assertLogs("cloudbridge.providers.kie", level="INFO") as logs:
+            client_with(session).wait_for_task("task-progress")
+
+        self.assertIn("state=success", logs.output[0])
+        self.assertIn("progress=100%", logs.output[0])
+        self.assertIn("elapsed=0s", logs.output[0])
 
     def test_retries_transient_poll_response(self):
         session = FakeSession(

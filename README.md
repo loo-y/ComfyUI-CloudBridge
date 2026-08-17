@@ -66,6 +66,10 @@ when it fits Kie's 10 MB input limit; larger images are converted to a
 high-quality JPEG. Uploaded files and generated URLs are temporary, while the
 downloaded output remains in the ComfyUI workflow as an IMAGE value.
 
+The ComfyUI console logs the Kie task ID, each polled task state, elapsed time,
+and the remote progress percentage when Kie provides one. Seedream may omit a
+percentage; in that case the state and elapsed time still confirm activity.
+
 ### Development
 
 Run the offline test suite without a Kie API key:
@@ -125,6 +129,8 @@ $env:KIE_API_KEY = "你的-Kie-API-Key"
 | `regenerate` | 关闭时相同输入可复用缓存；打开后每次 Queue 都会新建可能扣费的 Kie 任务。 |
 
 输入图片会通过 Kie 官方上传接口发送。10 MB 以内优先使用无损 PNG，超过后自动转换为高质量 JPEG。上传文件和远程结果链接都是临时资源，下载后的结果则作为 ComfyUI IMAGE 继续在工作流中使用。
+
+ComfyUI 控制台会显示 Kie 任务 ID、每次查询得到的任务状态、已等待时间，以及 Kie 返回进度时的百分比。Seedream 可能不返回百分比，此时仍会持续显示状态和耗时。
 
 ### 开发测试
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -9,6 +10,8 @@ import requests
 
 from ..utils.images import EncodedImage
 
+
+logger = logging.getLogger(__name__)
 
 UPLOAD_URL = "https://kieai.redpandaai.co/api/file-stream-upload"
 CREATE_TASK_URL = "https://api.kie.ai/api/v1/jobs/createTask"
@@ -128,6 +131,7 @@ class KieClient:
         task_id = (payload.get("data") or {}).get("taskId")
         if not isinstance(task_id, str) or not task_id:
             raise KieAPIError("Kie task creation succeeded without returning a task ID.")
+        logger.info("CloudBridge Kie task created: task_id=%s", task_id)
         return task_id
 
     def wait_for_task(self, task_id: str) -> KieTaskResult:
@@ -145,12 +149,21 @@ class KieClient:
                 )
             except requests.RequestException as exc:
                 last_transport_error = str(exc)
+                logger.warning(
+                    "CloudBridge Kie task %s: temporary status query error; retrying",
+                    task_id,
+                )
                 self._wait(delay_index)
                 delay_index += 1
                 continue
 
             if response.status_code == 429 or response.status_code >= 500:
                 last_transport_error = f"HTTP {response.status_code}"
+                logger.warning(
+                    "CloudBridge Kie task %s: status query returned HTTP %s; retrying",
+                    task_id,
+                    response.status_code,
+                )
                 self._wait(delay_index)
                 delay_index += 1
                 continue
@@ -159,6 +172,23 @@ class KieClient:
             self._require_api_success("task status", payload)
             data = payload.get("data") or {}
             state = data.get("state")
+            elapsed_seconds = int(self._monotonic() - start)
+            progress = data.get("progress")
+            if isinstance(progress, (int, float)) and not isinstance(progress, bool):
+                logger.info(
+                    "CloudBridge Kie task %s: state=%s, progress=%s%%, elapsed=%ss",
+                    task_id,
+                    state,
+                    progress,
+                    elapsed_seconds,
+                )
+            else:
+                logger.info(
+                    "CloudBridge Kie task %s: state=%s, elapsed=%ss",
+                    task_id,
+                    state,
+                    elapsed_seconds,
+                )
 
             if state in PENDING_STATES:
                 self._wait(delay_index)
